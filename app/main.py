@@ -1,5 +1,7 @@
+import os
 from fastapi import FastAPI, Request, status, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError, OperationalError
@@ -38,10 +40,34 @@ app.include_router(invoices_router, prefix="", include_in_schema=False)
 app.include_router(customers_router, prefix="", include_in_schema=False)
 app.include_router(products_router, prefix="", include_in_schema=False)
 
+# Mount static assets directory
+static_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
+if os.path.exists(static_dir):
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
-@app.get("/", tags=["Root"])
-async def root():
-    """Application root endpoint returning metadata and documentation links."""
+
+@app.get("/", tags=["GUI"], response_class=FileResponse)
+@app.get("/dashboard", tags=["GUI"], response_class=FileResponse)
+async def serve_dashboard():
+    """Grafiksel Kullanıcı Arayüzü (GUI) Web Dashboard portalını sunar."""
+    index_file = os.path.join(static_dir, "index.html")
+    if os.path.exists(index_file):
+        return FileResponse(index_file)
+    return JSONResponse(
+        content={
+            "name": settings.APP_NAME,
+            "version": settings.APP_VERSION,
+            "status": "healthy",
+            "docs_url": "/docs",
+            "redoc_url": "/redoc",
+            "api_prefix": settings.API_V1_PREFIX,
+        }
+    )
+
+
+@app.get("/api", tags=["Root"])
+async def api_root():
+    """API kök uç noktası: Uygulama metaverilerini ve dokümantasyon bağlantılarını döner."""
     return {
         "name": settings.APP_NAME,
         "version": settings.APP_VERSION,
@@ -50,6 +76,7 @@ async def root():
         "redoc_url": "/redoc",
         "api_prefix": settings.API_V1_PREFIX,
     }
+
 
 
 @app.get("/health", tags=["Health"])
