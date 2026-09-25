@@ -388,13 +388,83 @@
                             <i class="fa-solid fa-code text-indigo-600"></i>
                             <span>GİB UBL-TR 1.2 E-Fatura XML Çıktısı (Standart):</span>
                         </label>
-                        <button id="btn-download-xml" class="text-xs bg-slate-800 hover:bg-slate-700 text-white px-3 py-1 rounded shadow flex items-center space-x-1">
-                            <i class="fa-solid fa-download text-[10px]"></i>
-                            <span>.xml Olarak İndir</span>
-                        </button>
+                        <div class="flex items-center space-x-2">
+                            <button id="btn-fullscreen-xml" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-2.5 py-1 rounded shadow flex items-center space-x-1 transition">
+                                <i class="fa-solid fa-expand text-[10px]"></i>
+                                <span>XML Penceresinde Aç</span>
+                            </button>
+                            <button id="btn-download-xml" class="text-xs bg-slate-800 hover:bg-slate-700 text-white px-2.5 py-1 rounded shadow flex items-center space-x-1 transition">
+                                <i class="fa-solid fa-download text-[10px]"></i>
+                                <span>.xml İndir</span>
+                            </button>
+                        </div>
                     </div>
                     <pre id="modal-xml-content" class="xml-viewer p-4 rounded-xl text-xs overflow-x-auto select-all"></pre>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- DEDICATED MODAL: UBL-TR 1.2 XML GÖRÜNTÜLEYİCİ -->
+    <div id="modal-xml-viewer" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 text-white rounded-2xl shadow-2xl max-w-4xl w-full overflow-hidden border border-slate-700 max-h-[92vh] flex flex-col">
+            <!-- Modal Header -->
+            <div class="p-4 bg-slate-800 border-b border-slate-700 flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="w-9 h-9 rounded-lg bg-indigo-600 flex items-center justify-center text-white shadow">
+                        <i class="fa-solid fa-code text-sm"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <h3 id="xml-modal-title" class="font-bold text-sm text-slate-100">UBL-TR 1.2 E-Fatura XML Ağacı</h3>
+                            <span id="xml-modal-status-badge"></span>
+                        </div>
+                        <p id="xml-modal-subtitle" class="text-xs text-slate-400">GİB Standartlarında UBL 2.1 / UBL-TR 1.2 Formatlı XML Verisi</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button onclick="copyXmlToClipboard()" class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded-lg border border-slate-600 flex items-center space-x-1.5 transition">
+                        <i class="fa-solid fa-copy text-indigo-400"></i>
+                        <span>Kopyala</span>
+                    </button>
+                    <button id="xml-modal-download-btn" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg font-medium shadow flex items-center space-x-1.5 transition">
+                        <i class="fa-solid fa-download"></i>
+                        <span>.xml İndir</span>
+                    </button>
+                    <button onclick="closeModal('modal-xml-viewer')" class="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-700 transition">
+                        <i class="fa-solid fa-xmark text-lg"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- XML Code Window -->
+            <div class="p-4 bg-slate-950 flex-1 overflow-hidden flex flex-col">
+                <div class="flex items-center justify-between text-[11px] text-slate-400 mb-2 px-1">
+                    <div class="flex items-center space-x-3">
+                        <span class="inline-flex items-center space-x-1 text-emerald-400">
+                            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                            <span class="font-mono font-medium">UBL-TR 1.2 Valid</span>
+                        </span>
+                        <span class="text-slate-600">|</span>
+                        <span class="font-mono text-slate-400">MIME: application/xml</span>
+                    </div>
+                    <span class="text-slate-500 text-[11px]">Tıklayıp tümünü seçebilirsiniz (Ctrl+A)</span>
+                </div>
+                <div class="relative flex-1 overflow-auto rounded-xl border border-slate-800 bg-[#0f172a] p-4">
+                    <pre id="xml-viewer-code" class="text-xs font-mono leading-relaxed text-sky-300 selection:bg-indigo-700 selection:text-white select-all"></pre>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="px-5 py-2.5 bg-slate-800/90 border-t border-slate-700 text-xs text-slate-300 flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <span class="text-slate-400">ETTN (UUID):</span>
+                    <span id="xml-modal-uuid-info" class="font-mono text-[11px] text-indigo-300 font-semibold bg-slate-900 px-2 py-0.5 rounded border border-slate-700">-</span>
+                </div>
+                <span class="text-[11px] text-slate-400 flex items-center space-x-1">
+                    <i class="fa-solid fa-shield-halved text-emerald-400"></i>
+                    <span>Gelir İdaresi Başkanlığı (GİB) E-Fatura Entegrasyon Paketi Uyumlu</span>
+                </span>
             </div>
         </div>
     </div>
@@ -564,20 +634,28 @@
                         <td class="p-3 text-right font-bold text-slate-900">₺${formatCurrency(inv.grand_total)}</td>
                         <td class="p-3 text-center">${badge}</td>
                         <td class="p-3 text-center font-mono text-[11px] text-slate-500" title="${inv.uuid || ''}">${uuidShort}</td>
-                        <td class="p-3 text-center space-x-1">
-                            <button onclick="viewInvoiceDetail(${inv.id})" title="Detay & XML" class="p-1.5 text-slate-600 hover:text-indigo-600 rounded hover:bg-slate-100">
+                        <td class="p-3 text-center space-x-1.5 whitespace-nowrap">
+                            <button onclick="openXmlModal(${inv.id})" title="UBL-TR 1.2 XML Ağacını İncele" class="inline-flex items-center space-x-1 px-2.5 py-1 text-xs font-semibold rounded-md bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition">
+                                <i class="fa-solid fa-code"></i>
+                                <span>XML</span>
+                            </button>
+                            <button onclick="viewInvoiceDetail(${inv.id})" title="Fatura Fiş Detayı" class="inline-flex items-center space-x-1 px-2.5 py-1 text-xs font-medium rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 transition">
                                 <i class="fa-solid fa-eye"></i>
+                                <span>Detay</span>
                             </button>
                             ${inv.status !== 'ACCEPTED' ? `
-                                <button onclick="sendInvoiceToGib(${inv.id})" title="E-Fatura Olarak Gönder" class="p-1.5 text-emerald-600 hover:text-emerald-700 rounded hover:bg-emerald-50">
+                                <button onclick="sendInvoiceToGib(${inv.id})" title="E-Fatura Olarak GİB'e Gönder" class="inline-flex items-center space-x-1 px-2.5 py-1 text-xs font-semibold rounded-md bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition">
                                     <i class="fa-solid fa-paper-plane"></i>
+                                    <span>GİB'e Gönder</span>
                                 </button>
-                            ` : ''}
-                            <a href="/api/invoices/${inv.id}/xml" target="_blank" title="Doğrudan XML İndir" class="p-1.5 text-blue-600 hover:text-blue-700 rounded hover:bg-blue-50 inline-block">
-                                <i class="fa-solid fa-file-code"></i>
-                            </a>
+                            ` : `
+                                <span class="inline-flex items-center space-x-1 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 bg-emerald-50 rounded border border-emerald-300">
+                                    <i class="fa-solid fa-check-double"></i>
+                                    <span>GİB'de</span>
+                                </span>
+                            `}
                             ${inv.status === 'DRAFT' ? `
-                                <button onclick="deleteInvoice(${inv.id})" title="Sil" class="p-1.5 text-rose-500 hover:text-rose-700 rounded hover:bg-rose-50">
+                                <button onclick="deleteInvoice(${inv.id})" title="Taslağı Sil" class="p-1 text-rose-500 hover:text-rose-700 rounded hover:bg-rose-50 transition">
                                     <i class="fa-solid fa-trash"></i>
                                 </button>
                             ` : ''}
@@ -707,8 +785,12 @@
                     <td class="p-3 text-right text-slate-600">₺${formatCurrency(inv.total_vat)}</td>
                     <td class="p-3 text-right font-bold text-slate-900">₺${formatCurrency(inv.grand_total)}</td>
                     <td class="p-3 text-center">${getStatusBadge(inv.status)}</td>
-                    <td class="p-3 text-center">
-                        <button onclick="viewInvoiceDetail(${inv.id})" class="text-xs text-indigo-600 hover:underline">Görüntüle</button>
+                    <td class="p-3 text-center space-x-1.5 whitespace-nowrap">
+                        <button onclick="openXmlModal(${inv.id})" title="UBL-TR 1.2 XML Ağacını İncele" class="inline-flex items-center space-x-1 px-2 py-0.5 text-xs font-semibold rounded bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition">
+                            <i class="fa-solid fa-code text-[10px]"></i>
+                            <span>XML</span>
+                        </button>
+                        <button onclick="viewInvoiceDetail(${inv.id})" class="text-xs text-slate-600 hover:text-indigo-600 hover:underline">Detay</button>
                     </td>
                 </tr>
             `).join("");
@@ -930,6 +1012,10 @@
                 document.getElementById("modal-detail-title").innerText = `Fatura: ${inv.invoice_number} - ${inv.customer.name}`;
                 document.getElementById("modal-xml-content").innerText = xmlText;
                 document.getElementById("btn-download-xml").onclick = () => downloadXmlFile(inv.invoice_number, xmlText);
+                document.getElementById("btn-fullscreen-xml").onclick = () => {
+                    closeModal('modal-invoice-detail');
+                    openXmlModal(invoiceId);
+                };
 
                 // Build HTML Receipt Preview
                 const receiptHtml = `
@@ -981,6 +1067,62 @@
             } catch (err) {
                 Swal.fire("Hata", err.message, "error");
             }
+        }
+
+        let currentXmlText = "";
+        let currentXmlInvoiceNum = "";
+
+        async function openXmlModal(invoiceId) {
+            try {
+                Swal.fire({
+                    title: 'UBL-TR XML Yükleniyor...',
+                    text: 'GİB şeması hazırlanıyor',
+                    allowOutsideClick: false,
+                    didOpen: () => { Swal.showLoading(); }
+                });
+
+                const [invRes, xmlRes] = await Promise.all([
+                    fetch(`/api/invoices/${invoiceId}`),
+                    fetch(`/api/invoices/${invoiceId}/xml`)
+                ]);
+
+                if (!invRes.ok || !xmlRes.ok) throw new Error("Fatura veya UBL-TR XML verisi sunucudan alınamadı.");
+                const inv = await invRes.json();
+                const xmlText = await xmlRes.text();
+
+                Swal.close();
+
+                currentXmlText = xmlText;
+                currentXmlInvoiceNum = inv.invoice_number;
+
+                document.getElementById("xml-modal-title").innerText = `UBL-TR 1.2 XML: ${inv.invoice_number}`;
+                document.getElementById("xml-modal-subtitle").innerText = `Alıcı: ${inv.customer ? inv.customer.name : '-'} | Tarih: ${inv.invoice_date}`;
+                document.getElementById("xml-modal-status-badge").innerHTML = getStatusBadge(inv.status);
+                document.getElementById("xml-modal-uuid-info").innerText = inv.uuid || 'Taslak Fatura (GİB gönderiminde UUID üretilir)';
+                document.getElementById("xml-viewer-code").innerText = xmlText;
+                
+                document.getElementById("xml-modal-download-btn").onclick = () => downloadXmlFile(inv.invoice_number, xmlText);
+
+                document.getElementById("modal-xml-viewer").classList.remove("hidden");
+            } catch (err) {
+                Swal.fire("Hata", err.message, "error");
+            }
+        }
+
+        function copyXmlToClipboard() {
+            if (!currentXmlText) return;
+            navigator.clipboard.writeText(currentXmlText).then(() => {
+                Swal.fire({
+                    toast: true,
+                    position: 'top-end',
+                    icon: 'success',
+                    title: 'UBL-TR XML panoya kopyalandı!',
+                    showConfirmButton: false,
+                    timer: 2000
+                });
+            }).catch(() => {
+                Swal.fire("Bilgi", "XML metnini kutudan seçip Ctrl+C ile kopyalayabilirsiniz.", "info");
+            });
         }
 
         function downloadXmlFile(invoiceNumber, content) {
