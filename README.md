@@ -279,7 +279,8 @@ Uygulama çalışırken aşağıdaki adreslerden interaktif dokümantasyona eri�
 | | `GET` | `/api/invoices/{id}/lines` | Sadece fatura kalemlerini getir | `200 OK` |
 | | `DELETE` | `/api/invoices/{id}` | Faturayı sil | `204 No Content` |
 | | `POST` | `/api/invoices/{id}/send` | E-Fatura sistemine gönder | `200 OK` |
-| | `GET` | `/api/invoices/{id}/ubl` | UBL-TR 1.2 XML formatında dışa aktar | `200 OK` |
+| | `GET` | `/api/invoices/{id}/ubl` | UBL-TR 1.2 veri paketi (JSON/XML) | `200 OK` |
+| | `GET` | `/api/invoices/{id}/xml` | UBL-TR 1.2 XML belgesi (`application/xml`) | `200 OK` |
 
 ---
 
@@ -359,37 +360,80 @@ Uygulama çalışırken aşağıdaki adreslerden interaktif dokümantasyona eri�
 }
 ```
 
+### 3. Faturanın UBL-TR 1.2 XML Belgesini Alma (GET `/api/invoices/{id}/xml`)
+
+**Yanıt Başlığı:** `Content-Type: application/xml`  
+**Dönen Yanıt (`200 OK` - XML Çıktısı):**
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+         xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+         xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+    <cbc:UBLVersionID>2.1</cbc:UBLVersionID>
+    <cbc:CustomizationID>TR1.2</cbc:CustomizationID>
+    <cbc:ProfileID>TICARIFATURA</cbc:ProfileID>
+    <cbc:ID>INV-2026-000001</cbc:ID>
+    <cbc:UUID>1c509840-b880-404e-800b-3bbe6ef59d24</cbc:UUID>
+    <cbc:IssueDate>2026-09-25</cbc:IssueDate>
+    <cbc:InvoiceTypeCode>SATIS</cbc:InvoiceTypeCode>
+    <cbc:DocumentCurrencyCode>TRY</cbc:DocumentCurrencyCode>
+    <cac:AccountingSupplierParty>
+        <cac:Party>
+            <cac:PartyIdentification>
+                <cbc:ID schemeID="VKN">1234567890</cbc:ID>
+            </cac:PartyIdentification>
+            <cac:PartyName>
+                <cbc:Name>ERP E-Dönüşüm ve Bilişim Hizmetleri A.Ş.</cbc:Name>
+            </cac:PartyName>
+            <cac:PostalAddress>
+                <cbc:StreetName>Büyükdere Cad. No:199</cbc:StreetName>
+                <cbc:CitySubdivisionName>Sarıyer</cbc:CitySubdivisionName>
+                <cbc:CityName>İstanbul</cbc:CityName>
+            </cac:PostalAddress>
+        </cac:Party>
+    </cac:AccountingSupplierParty>
+    <cac:AccountingCustomerParty>
+        <cac:Party>
+            <cac:PartyIdentification>
+                <cbc:ID schemeID="VKN">1234567890</cbc:ID>
+            </cac:PartyIdentification>
+            <cac:PartyName>
+                <cbc:Name>Atlas Yazılım ve Danışmanlık A.Ş.</cbc:Name>
+            </cac:PartyName>
+        </cac:Party>
+    </cac:AccountingCustomerParty>
+    <cac:TaxTotal>
+        <cbc:TaxAmount currencyID="TRY">2500.00</cbc:TaxAmount>
+    </cac:TaxTotal>
+    <cac:LegalMonetaryTotal>
+        <cbc:LineExtensionAmount currencyID="TRY">12500.00</cbc:LineExtensionAmount>
+        <cbc:PayableAmount currencyID="TRY">15000.00</cbc:PayableAmount>
+    </cac:LegalMonetaryTotal>
+    <cac:InvoiceLine>
+        <cbc:ID>1</cbc:ID>
+        <cbc:InvoicedQuantity unitCode="NIU">2.00</cbc:InvoicedQuantity>
+        <cbc:LineExtensionAmount currencyID="TRY">5000.00</cbc:LineExtensionAmount>
+        ...
+    </cac:InvoiceLine>
+</Invoice>
+```
+
 ---
 
 ## E-Fatura Entegrasyon Mimarisi ve Gelecek Yol Haritası
 
 Sistem, **Dependency Injection** ve **Strategy / Adapter Tasarım Deseni** ile tasarlanmıştır.
 
-`app/services/einvoice_service.py` içerisinde:
+`app/services/einvoice_service.py` ve `app/services/ubl_service.py` içerisinde:
 
-```python
-class BaseEInvoiceService(ABC):
-    @abstractmethod
-    def send_invoice(self, invoice: InvoiceHeader) -> Dict[str, Any]:
-        pass
-
-    @abstractmethod
-    def get_status(self, invoice_uuid: str) -> Dict[str, Any]:
-        pass
-```
-
-### Gelecekte Canlı Entegratör Bağlantısı Nasıl Yapılır?
-
-1. **UBL-TR 1.2 XML Çıktısı**: Fatura başlığı ve kalemleri Gelir İdaresi Başkanlığı'nın standart UBL-TR XML şemasına dönüştürülür.
-2. **Mali Mühür / E-İmza**: XML belgesi XAdES-BES formatında imzalanır.
-3. **Özel Entegratör API**: `GibEInvoiceService` sınıfı doldurularak ilgili entegratörün (Örn: Sovos, Foriba, Logo, Digital Planet, EDM vb.) SOAP veya REST API'sine HTTP POST yapılır.
-4. **Konfigürasyon Değişimi**: `get_einvoice_service()` factory fonksiyonu `.env` dosyasındaki `EINVOICE_PROVIDER=GIB` parametresine göre canlı servisi döner. İş mantığı katmanı ve API router'ları hiçbir kod değişikliğine uğramadan canlı sisteme geçer.
+* **`UBLTRService`**: `xml.etree.ElementTree` kütüphanesini kullanarak nesneleri UBL-TR 1.2 XML ağacına serileştirir.
+* **`BaseEInvoiceService`**: Entegratör ve GİB servis çağrılarını soyutlar.
 
 ---
 
 ## Testlerin Çalıştırılması
 
-Proje, tüm uç noktaları ve sınır durumları test eden 18 adet senaryoyu içerir:
+Proje, tüm uç noktaları, XML dönüşümünü ve sınır durumları test eden 30 adet senaryoyu içerir:
 
 * Müşteri oluşturma, listeleme, güncelleme ve silme
 * Tekil Vergi Numarası (`tax_number`) çakışma kontrolü (409)
@@ -398,10 +442,12 @@ Proje, tüm uç noktaları ve sınır durumları test eden 18 adet senaryoyu iç
 * Negatif birim fiyat ve hatalı KDV doğrulama kontrolleri (422)
 * Otomatik fatura numaralandırma doğrulaması
 * Fatura satır toplamı, KDV ve genel toplam matematiksel hesaplama doğrulaması
-* Olmayan müşteriyle fatura oluşturulmasının engellenmesi (404)
-* Olmayan ürünle fatura oluşturulmasının engellenmesi (404)
+* Olmayan müşteri ve ürünle fatura oluşturulmasının engellenmesi (404)
+* Taslak fatura güncelleme (`PUT /invoices/{id}`) ve onaylı fatura koruması (400)
+* Entegratör filtreleme parametreleri sorgu testleri
 * Faturanın E-Fatura servisine gönderilmesi ve durum güncellemesi
-* Olmayan fatura sorgusunda 404 kontrolü
+* VKN (10 hane) / TCKN (11 hane) doğrulama testleri
+* UBL-TR 1.2 XML ElementTree şema doğrulaması ve `/invoices/{id}/xml` uç nokta testleri
 
 Testleri çalıştırmak için:
 
@@ -411,26 +457,7 @@ pytest -v
 
 Çıktı Örneği:
 ```text
-tests/test_customers.py::test_create_customer PASSED                     [  5%]
-tests/test_customers.py::test_list_customers PASSED                      [ 11%]
-tests/test_customers.py::test_duplicate_tax_number_conflict PASSED       [ 16%]
-tests/test_customers.py::test_get_customer_by_id PASSED                  [ 22%]
-tests/test_customers.py::test_update_customer PASSED                     [ 27%]
-tests/test_customers.py::test_delete_customer PASSED                     [ 33%]
-tests/test_invoices.py::test_create_invoice_and_calculate_totals PASSED  [ 38%]
-tests/test_invoices.py::test_create_invoice_nonexistent_customer PASSED  [ 44%]
-tests/test_invoices.py::test_create_invoice_nonexistent_product PASSED   [ 50%]
-tests/test_invoices.py::test_send_invoice PASSED                         [ 55%]
-tests/test_invoices.py::test_invoice_not_found_404 PASSED                [ 61%]
-tests/test_invoices.py::test_get_invoice_lines_and_delete PASSED         [ 66%]
-tests/test_products.py::test_create_product PASSED                       [ 72%]
-tests/test_products.py::test_list_products PASSED                        [ 77%]
-tests/test_products.py::test_duplicate_product_code_conflict PASSED      [ 83%]
-tests/test_products.py::test_product_validation PASSED                   [ 88%]
-tests/test_products.py::test_get_product_by_id PASSED                    [ 94%]
-tests/test_products.py::test_update_and_delete_product PASSED            [100%]
-
-======================= 18 passed in 0.44s =======================
+======================= 30 passed in 0.95s =======================
 ```
 
 ---
@@ -438,3 +465,4 @@ tests/test_products.py::test_update_and_delete_product PASSED            [100%]
 ## Lisans & Geliştirici Notu
 
 Bu proje kurumsal standartlarda, temiz kod prensiplerine (Clean Code & SOLID) ve modern Python (3.12+) en iyi pratiklerine tam uyumlu olarak geliştirilmiştir.
+

@@ -1,6 +1,6 @@
 from datetime import date
 from typing import List, Optional
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, status, Response
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.schemas.invoice import (
@@ -163,3 +163,35 @@ async def export_invoice_ubl(
     db: Session = Depends(get_db)
 ):
     return invoice_service.export_invoice_ubl(db=db, invoice_id=invoice_id)
+
+
+@router.get(
+    "/{invoice_id}/xml",
+    response_class=Response,
+    status_code=status.HTTP_200_OK,
+    summary="Faturanın UBL-TR XML belgesini getir",
+    description=(
+        "Faturayı doğrudan 'application/xml' MIME tipi ve UTF-8 kodlamasıyla "
+        "standart GİB UBL-TR 1.2 XML belgesi olarak döner."
+    ),
+    responses={
+        200: {
+            "content": {"application/xml": {}},
+            "description": "Başarılı UBL-TR 1.2 XML e-fatura belgesi çıktısı.",
+        }
+    },
+)
+async def get_invoice_xml(
+    invoice_id: int,
+    db: Session = Depends(get_db)
+):
+    """Belirli bir faturayı standart application/xml formatında döner."""
+    xml_content = invoice_service.get_invoice_xml_document(db=db, invoice_id=invoice_id)
+    return Response(
+        content=xml_content,
+        media_type="application/xml",
+        headers={
+            "Content-Disposition": f'inline; filename="invoice_{invoice_id}.xml"'
+        }
+    )
+

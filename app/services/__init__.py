@@ -7,6 +7,7 @@ from app.services.einvoice_service import (
     GibEInvoiceService,
     get_einvoice_service,
 )
+from app.services.ubl_service import UBLTRService, ubl_service
 
 __all__ = [
     "CustomerService",
@@ -16,4 +17,6 @@ __all__ = [
     "MockEInvoiceService",
     "GibEInvoiceService",
     "get_einvoice_service",
+    "UBLTRService",
+    "ubl_service",
 ]

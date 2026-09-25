@@ -17,6 +17,7 @@ from app.schemas.invoice import (
     InvoiceUBLExportResponse,
 )
 from app.services.einvoice_service import BaseEInvoiceService, MockEInvoiceService
+from app.services.ubl_service import ubl_service
 
 
 class InvoiceService:
@@ -341,83 +342,7 @@ class InvoiceService:
         """
         invoice = self.get_invoice_by_id(db=db, invoice_id=invoice_id)
         cust = invoice.customer
-
-        lines_xml = []
-        for idx, line in enumerate(invoice.lines, start=1):
-            prod_name = line.product.name if line.product else "Ürün"
-            prod_code = line.product.code if line.product else "PRD"
-            lines_xml.append(
-                f"""    <cac:InvoiceLine>
-        <cbc:ID>{idx}</cbc:ID>
-        <cbc:InvoicedQuantity unitCode="NIU">{line.quantity}</cbc:InvoicedQuantity>
-        <cbc:LineExtensionAmount currencyID="TRY">{line.line_total}</cbc:LineExtensionAmount>
-        <cac:TaxTotal>
-            <cbc:TaxAmount currencyID="TRY">{line.vat_amount}</cbc:TaxAmount>
-            <cac:TaxSubtotal>
-                <cbc:TaxableAmount currencyID="TRY">{line.line_total}</cbc:TaxableAmount>
-                <cbc:TaxAmount currencyID="TRY">{line.vat_amount}</cbc:TaxAmount>
-                <cbc:Percent>{line.vat_rate}</cbc:Percent>
-                <cac:TaxCategory>
-                    <cac:TaxScheme>
-                        <cbc:Name>KDV</cbc:Name>
-                        <cbc:TaxTypeCode>0015</cbc:TaxTypeCode>
-                    </cac:TaxScheme>
-                </cac:TaxCategory>
-            </cac:TaxSubtotal>
-        </cac:TaxTotal>
-        <cac:Item>
-            <cbc:Description>{prod_name}</cbc:Description>
-            <cbc:Name>{prod_code}</cbc:Name>
-        </cac:Item>
-        <cac:Price>
-            <cbc:PriceAmount currencyID="TRY">{line.unit_price}</cbc:PriceAmount>
-        </cac:Price>
-    </cac:InvoiceLine>"""
-            )
-
-        lines_joined = "\n".join(lines_xml)
-        uuid_str = invoice.uuid or "00000000-0000-0000-0000-000000000000"
-
-        xml_preview = f"""<?xml version="1.0" encoding="UTF-8"?>
-<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
-         xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
-         xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
-    <cbc:UBLVersionID>2.1</cbc:UBLVersionID>
-    <cbc:CustomizationID>TR1.2</cbc:CustomizationID>
-    <cbc:ProfileID>TICARIFATURA</cbc:ProfileID>
-    <cbc:ID>{invoice.invoice_number}</cbc:ID>
-    <cbc:UUID>{uuid_str}</cbc:UUID>
-    <cbc:IssueDate>{invoice.invoice_date}</cbc:IssueDate>
-    <cbc:InvoiceTypeCode>SATIS</cbc:InvoiceTypeCode>
-    <cbc:DocumentCurrencyCode>TRY</cbc:DocumentCurrencyCode>
-    <cac:AccountingSupplierParty>
-        <cac:Party>
-            <cac:PartyName>
-                <cbc:Name>ERP E-Dönüşüm A.Ş.</cbc:Name>
-            </cac:PartyName>
-        </cac:Party>
-    </cac:AccountingSupplierParty>
-    <cac:AccountingCustomerParty>
-        <cac:Party>
-            <cac:PartyIdentification>
-                <cbc:ID schemeID="VKN">{cust.tax_number if cust else '1111111111'}</cbc:ID>
-            </cac:PartyIdentification>
-            <cac:PartyName>
-                <cbc:Name>{cust.name if cust else 'Müşteri'}</cbc:Name>
-            </cac:PartyName>
-        </cac:Party>
-    </cac:AccountingCustomerParty>
-    <cac:TaxTotal>
-        <cbc:TaxAmount currencyID="TRY">{invoice.total_vat}</cbc:TaxAmount>
-    </cac:TaxTotal>
-    <cac:LegalMonetaryTotal>
-        <cbc:LineExtensionAmount currencyID="TRY">{invoice.total_amount}</cbc:LineExtensionAmount>
-        <cbc:TaxExclusiveAmount currencyID="TRY">{invoice.total_amount}</cbc:TaxExclusiveAmount>
-        <cbc:TaxInclusiveAmount currencyID="TRY">{invoice.grand_total}</cbc:TaxInclusiveAmount>
-        <cbc:PayableAmount currencyID="TRY">{invoice.grand_total}</cbc:PayableAmount>
-    </cac:LegalMonetaryTotal>
-{lines_joined}
-</Invoice>"""
+        xml_content = ubl_service.generate_ubl_xml(invoice=invoice)
 
         return InvoiceUBLExportResponse(
             invoice_id=invoice.id,
@@ -432,5 +357,13 @@ class InvoiceService:
             total_amount=invoice.total_amount,
             total_vat=invoice.total_vat,
             grand_total=invoice.grand_total,
-            ubl_xml=xml_preview,
+            ubl_xml=xml_content,
         )
+
+    def get_invoice_xml_document(self, db: Session, invoice_id: int) -> str:
+        """
+        Generate raw UBL-TR 1.2 XML document string for application/xml HTTP responses.
+        """
+        invoice = self.get_invoice_by_id(db=db, invoice_id=invoice_id)
+        return ubl_service.generate_ubl_xml(invoice=invoice)
+
