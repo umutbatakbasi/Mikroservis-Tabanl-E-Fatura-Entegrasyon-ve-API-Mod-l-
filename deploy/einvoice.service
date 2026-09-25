@@ -1,0 +1,26 @@
+[Unit]
+Description=Gunicorn and Uvicorn Daemon for E-Invoice Integration API
+After=network.target remote-fs.target nss-lookup.target
+
+[Service]
+Type=notify
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/einvoice-api
+RuntimeDirectory=einvoice
+EnvironmentFile=/var/www/einvoice-api/.env
+ExecStart=/var/www/einvoice-api/.venv/bin/gunicorn -c deploy/gunicorn_conf.py app.main:app
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=5
+PrivateTmp=true
+Restart=always
+RestartSec=5
+
+# Security hardening directives
+ProtectSystem=full
+ProtectHome=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

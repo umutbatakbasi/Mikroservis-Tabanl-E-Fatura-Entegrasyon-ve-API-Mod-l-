@@ -462,7 +462,58 @@ pytest -v
 
 ---
 
+## Canlı Sunucu Kurulumu ve Deployment (Production Architecture)
+
+Uygulama, yüksek trafik ve finansal veri güvenliği standartlarına uygun olarak Linux (Ubuntu LTS) VPS üzerinde **Gunicorn + Uvicorn + Nginx + Systemd + Certbot (SSL/TLS) + UFW** yığını ile canlı ortama taşınacak şekilde yapılandırılmıştır.
+
+### Canlı Ortam Mimari Şeması
+
+```mermaid
+flowchart TD
+    Client(["İstemciler / ERP / Entegratörler"]) -->|HTTPS :443 / SSL-TLS| Firewall["UFW Güvenlik Duvarı (Ports: 22, 80, 443)"]
+    Firewall --> Nginx["Nginx Ters Vekil Sunucu (Reverse Proxy)"]
+    Nginx -->|HTTP 301 Redirect| Nginx
+    Nginx -->|proxy_pass :8000 (Rate Limiting & DDoS Koruması)| Gunicorn["Gunicorn Süreç Yöneticisi (Process Manager)"]
+    subgraph Systemd Daemon [Systemd Servisi: einvoice.service]
+        Gunicorn --> Worker1["Uvicorn Worker 1 (Asenkron ASGI)"]
+        Gunicorn --> Worker2["Uvicorn Worker 2 (Asenkron ASGI)"]
+        Gunicorn --> Worker3["Uvicorn Worker 3 (Asenkron ASGI)"]
+        Gunicorn --> Worker4["Uvicorn Worker 4 (Asenkron ASGI)"]
+    end
+    Worker1 --> FastAPI["FastAPI Uygulaması (app.main:app)"]
+    Worker2 --> FastAPI
+    Worker3 --> FastAPI
+    Worker4 --> FastAPI
+    FastAPI --> Database[("Veritabanı (SQLite / PostgreSQL)")]
+```
+
+### Canlı Ortam Yapılandırma Dosyaları (`deploy/`)
+
+| Dosya | Açıklama |
+| :--- | :--- |
+| **`deploy/gunicorn_conf.py`** | Gunicorn çoklu işçi (multi-worker) ve Uvicorn runtime konfigürasyonu |
+| **`deploy/einvoice.service`** | Systemd arka plan servis birimi (otomatik yeniden başlatma ve izolasyon) |
+| **`deploy/nginx.conf`** | SSL/TLS, 301 HTTPS yönlendirmesi, gzip ve ters vekil Nginx ayarları |
+| **`deploy/ufw_setup.sh`** | UFW güvenlik duvarı kuralları (22, 80, 443 dışındaki tüm portları kapatma) |
+| **`deploy/setup_server.sh`** | Baştan sona tek komutla sunucu kurulumu otomasyon scripti |
+| **`deploy/production.env.example`** | Canlı ortam çevre değişkenleri şablonu |
+
+### Canlı Sunucuda Tek Komutla Kurulum:
+
+```bash
+# Depoyu sunucuya çekme
+git clone <repo-url> /var/www/einvoice-api
+cd /var/www/einvoice-api
+
+# Kurulum scriptini çalıştırma
+chmod +x deploy/*.sh
+sudo ./deploy/setup_server.sh
+```
+
+---
+
 ## Lisans & Geliştirici Notu
 
 Bu proje kurumsal standartlarda, temiz kod prensiplerine (Clean Code & SOLID) ve modern Python (3.12+) en iyi pratiklerine tam uyumlu olarak geliştirilmiştir.
+
 
