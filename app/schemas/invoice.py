@@ -32,6 +32,17 @@ class InvoiceCreate(BaseModel):
     )
 
 
+class InvoiceUpdate(BaseModel):
+    """Schema for updating an existing invoice (only permitted in DRAFT status)."""
+    customer_id: Optional[int] = Field(None, gt=0, description="Güncellenecek Müşteri ID'si")
+    invoice_date: Optional[date] = Field(None, description="Güncellenecek fatura tarihi")
+    lines: Optional[List[InvoiceLineCreate]] = Field(
+        None,
+        min_length=1,
+        description="Güncellenecek fatura kalemleri (sağlanırsa mevcut kalemlerin yerini alır)"
+    )
+
+
 class InvoiceLineResponse(BaseModel):
     """Schema for returning line item details."""
     id: int
@@ -73,3 +84,22 @@ class InvoiceSendResponse(BaseModel):
     invoice_number: str
     uuid: str
     status: str
+
+
+class InvoiceUBLExportResponse(BaseModel):
+    """Schema for E-Invoice UBL-TR 1.2 XML & Integrator data bundle."""
+    invoice_id: int
+    invoice_number: str
+    uuid: Optional[str]
+    issue_date: date
+    profile_id: str = "TICARIFATURA"
+    invoice_type_code: str = "SATIS"
+    document_currency_code: str = "TRY"
+    customer_tax_number: str
+    customer_name: str
+    total_amount: Decimal
+    total_vat: Decimal
+    grand_total: Decimal
+    ubl_xml: str
+
+    model_config = ConfigDict(from_attributes=True)

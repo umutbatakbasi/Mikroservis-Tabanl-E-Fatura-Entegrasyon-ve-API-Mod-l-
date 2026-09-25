@@ -13,9 +13,11 @@ from app.schemas.product import (
 from app.schemas.invoice import (
     InvoiceLineCreate,
     InvoiceCreate,
+    InvoiceUpdate,
     InvoiceLineResponse,
     InvoiceResponse,
     InvoiceSendResponse,
+    InvoiceUBLExportResponse,
 )
 
 __all__ = [
@@ -29,7 +31,9 @@ __all__ = [
     "ProductResponse",
     "InvoiceLineCreate",
     "InvoiceCreate",
+    "InvoiceUpdate",
     "InvoiceLineResponse",
     "InvoiceResponse",
     "InvoiceSendResponse",
+    "InvoiceUBLExportResponse",
 ]

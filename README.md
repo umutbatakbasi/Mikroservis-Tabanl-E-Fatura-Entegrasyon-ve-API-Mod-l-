@@ -272,12 +272,14 @@ Uygulama çalışırken aşağıdaki adreslerden interaktif dokümantasyona eri�
 | | `GET` | `/api/products/{id}` | Ürün detayını getir | `200 OK` |
 | | `PUT` | `/api/products/{id}` | Ürünü güncelle | `200 OK` |
 | | `DELETE` | `/api/products/{id}` | Ürünü sil | `204 No Content` |
-| **Invoices** | `POST` | `/api/invoices` | Yeni fatura oluştur (backend hesaplamalı) | `201 Created` |
-| | `GET` | `/api/invoices` | Tüm faturaları listele | `200 OK` |
+| **Invoices** | `POST` | `/api/invoices` | Yeni fatura oluştur (asenkron, backend hesaplamalı) | `201 Created` |
+| | `GET` | `/api/invoices` | Faturaları listele (durum, müşteri ve tarih filtresi) | `200 OK` |
 | | `GET` | `/api/invoices/{id}` | Fatura detayını ve kalemlerini getir | `200 OK` |
+| | `PUT` | `/api/invoices/{id}` | Taslak faturayı güncelle (DRAFT kontrollü) | `200 OK` |
 | | `GET` | `/api/invoices/{id}/lines` | Sadece fatura kalemlerini getir | `200 OK` |
 | | `DELETE` | `/api/invoices/{id}` | Faturayı sil | `204 No Content` |
 | | `POST` | `/api/invoices/{id}/send` | E-Fatura sistemine gönder | `200 OK` |
+| | `GET` | `/api/invoices/{id}/ubl` | UBL-TR 1.2 XML formatında dışa aktar | `200 OK` |
 
 ---
 

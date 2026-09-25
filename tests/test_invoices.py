@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from fastapi import status
 
@@ -95,7 +95,7 @@ def test_create_invoice_nonexistent_customer(client):
     }
     response = client.post("/api/invoices", json=payload)
     assert response.status_code == status.HTTP_404_NOT_FOUND
-    assert "Customer with ID 99999 not found" in response.json()["detail"]
+    assert "Müşteri bulunamadı" in response.json()["detail"]
 
 
 def test_create_invoice_nonexistent_product(client):
@@ -109,7 +109,7 @@ def test_create_invoice_nonexistent_product(client):
     }
     response = client.post("/api/invoices", json=payload)
     assert response.status_code == status.HTTP_404_NOT_FOUND
-    assert "Product with ID 88888 not found" in response.json()["detail"]
+    assert "Ürün bulunamadı" in response.json()["detail"]
 
 
 def test_send_invoice(client):
@@ -144,7 +144,7 @@ def test_invoice_not_found_404(client):
     """Scenario 12: Invoice bulunamadığında 404."""
     response = client.get("/api/invoices/99999")
     assert response.status_code == status.HTTP_404_NOT_FOUND
-    assert "Invoice with ID 99999 not found" in response.json()["detail"]
+    assert "Fatura bulunamadı" in response.json()["detail"]
 
 
 def test_get_invoice_lines_and_delete(client):
@@ -173,3 +173,120 @@ def test_get_invoice_lines_and_delete(client):
 
     # Verify deleted
     assert client.get(f"/api/invoices/{invoice_id}").status_code == status.HTTP_404_NOT_FOUND
+
+
+def test_update_invoice_in_draft(client):
+    """Day 9: Test updating a draft invoice (PUT /api/invoices/{id})."""
+    customer_id, prod1_id, prod2_id = create_sample_customer_and_products(client)
+
+    # 1. Create initial invoice
+    create_res = client.post("/api/invoices", json={
+        "customer_id": customer_id,
+        "invoice_date": str(date.today()),
+        "lines": [{"product_id": prod1_id, "quantity": 1}]
+    })
+    invoice_id = create_res.json()["id"]
+    assert Decimal(str(create_res.json()["grand_total"])) == Decimal("1200.00")
+
+    # 2. Update with new lines (prod2 with quantity 4 -> 4 * 500 = 2000, 10% VAT = 200 -> 2200)
+    update_res = client.put(f"/api/invoices/{invoice_id}", json={
+        "lines": [{"product_id": prod2_id, "quantity": 4}]
+    })
+    assert update_res.status_code == status.HTTP_200_OK
+    data = update_res.json()
+    assert Decimal(str(data["total_amount"])) == Decimal("2000.00")
+    assert Decimal(str(data["total_vat"])) == Decimal("200.00")
+    assert Decimal(str(data["grand_total"])) == Decimal("2200.00")
+
+
+def test_update_accepted_invoice_forbidden(client):
+    """Day 9: Updating an accepted invoice must be rejected with 400 Bad Request."""
+    customer_id, prod1_id, _ = create_sample_customer_and_products(client)
+
+    create_res = client.post("/api/invoices", json={
+        "customer_id": customer_id,
+        "invoice_date": str(date.today()),
+        "lines": [{"product_id": prod1_id, "quantity": 1}]
+    })
+    invoice_id = create_res.json()["id"]
+
+    # Send and accept invoice
+    client.post(f"/api/invoices/{invoice_id}/send")
+
+    # Attempt to update
+    update_res = client.put(f"/api/invoices/{invoice_id}", json={
+        "lines": [{"product_id": prod1_id, "quantity": 5}]
+    })
+    assert update_res.status_code == status.HTTP_400_BAD_REQUEST
+    assert "Yalnızca taslak (DRAFT)" in update_res.json()["detail"]
+
+
+def test_filter_invoices_for_integrators(client):
+    """Day 9: Test GET /invoices with filters (status, customer, date)."""
+    customer_id, prod1_id, _ = create_sample_customer_and_products(client)
+
+    # Create Invoice 1 (DRAFT)
+    client.post("/api/invoices", json={
+        "customer_id": customer_id,
+        "invoice_date": str(date.today() - timedelta(days=5)),
+        "lines": [{"product_id": prod1_id, "quantity": 1}]
+    })
+
+    # Create Invoice 2 (SENT/ACCEPTED)
+    res2 = client.post("/api/invoices", json={
+        "customer_id": customer_id,
+        "invoice_date": str(date.today()),
+        "lines": [{"product_id": prod1_id, "quantity": 2}]
+    })
+    inv2_id = res2.json()["id"]
+    client.post(f"/api/invoices/{inv2_id}/send")
+
+    # Filter by status=ACCEPTED
+    filtered_res = client.get("/api/invoices?status=ACCEPTED")
+    assert filtered_res.status_code == status.HTTP_200_OK
+    results = filtered_res.json()
+    assert len(results) == 1
+    assert results[0]["status"] == "ACCEPTED"
+
+    # Filter by customer_id
+    cust_filtered = client.get(f"/api/invoices?customer_id={customer_id}")
+    assert cust_filtered.status_code == status.HTTP_200_OK
+    assert len(cust_filtered.json()) == 2
+
+
+def test_export_invoice_ubl(client):
+    """Day 9: Test GET /api/invoices/{id}/ubl for standard UBL-TR 1.2 XML generation."""
+    customer_id, prod1_id, _ = create_sample_customer_and_products(client)
+
+    create_res = client.post("/api/invoices", json={
+        "customer_id": customer_id,
+        "invoice_date": str(date.today()),
+        "lines": [{"product_id": prod1_id, "quantity": 1}]
+    })
+    invoice_id = create_res.json()["id"]
+
+    ubl_res = client.get(f"/api/invoices/{invoice_id}/ubl")
+    assert ubl_res.status_code == status.HTTP_200_OK
+    ubl_data = ubl_res.json()
+    assert ubl_data["profile_id"] == "TICARIFATURA"
+    assert "<Invoice" in ubl_data["ubl_xml"]
+    assert "</Invoice>" in ubl_data["ubl_xml"]
+    assert ubl_data["customer_tax_number"] == "1112223334"
+
+
+def test_direct_invoices_route(client):
+    """Day 9: Test direct /invoices and /invoices/ routes without /api prefix."""
+    customer_id, prod1_id, _ = create_sample_customer_and_products(client)
+
+    # POST /invoices
+    res = client.post("/invoices", json={
+        "customer_id": customer_id,
+        "invoice_date": str(date.today()),
+        "lines": [{"product_id": prod1_id, "quantity": 1}]
+    })
+    assert res.status_code == status.HTTP_201_CREATED
+
+    # GET /invoices
+    get_res = client.get("/invoices")
+    assert get_res.status_code == status.HTTP_200_OK
+    assert len(get_res.json()) >= 1

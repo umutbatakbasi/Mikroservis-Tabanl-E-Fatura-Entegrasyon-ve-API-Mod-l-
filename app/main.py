@@ -1,6 +1,8 @@
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request, status, HTTPException
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError, OperationalError
 from app.core.config import settings
 from app.routers import customers_router, products_router, invoices_router
 
@@ -31,9 +33,14 @@ app.include_router(customers_router, prefix=settings.API_V1_PREFIX)
 app.include_router(products_router, prefix=settings.API_V1_PREFIX)
 app.include_router(invoices_router, prefix=settings.API_V1_PREFIX)
 
+# Also mount under root (/invoices, /customers, /products) for direct endpoint compatibility
+app.include_router(invoices_router, prefix="", include_in_schema=False)
+app.include_router(customers_router, prefix="", include_in_schema=False)
+app.include_router(products_router, prefix="", include_in_schema=False)
+
 
 @app.get("/", tags=["Root"])
-def root():
+async def root():
     """Application root endpoint returning metadata and documentation links."""
     return {
         "name": settings.APP_NAME,
@@ -46,15 +53,76 @@ def root():
 
 
 @app.get("/health", tags=["Health"])
-def health_check():
+async def health_check():
     """Health check endpoint for container orchestrators and monitoring tools."""
     return {"status": "ok", "app": settings.APP_NAME}
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """
+    Handle Pydantic validation errors (422 Unprocessable Entity)
+    with clean, structured Turkish messages.
+    """
+    errors = []
+    for err in exc.errors():
+        field = " -> ".join(str(loc) for loc in err["loc"] if loc != "body")
+        errors.append({
+            "field": field or "body",
+            "message": err["msg"],
+            "type": err["type"]
+        })
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "detail": "İstemci tarafından gönderilen veride doğrulama (validation) hatası oluştu.",
+            "status_code": status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "errors": errors
+        }
+    )
+
+
+@app.exception_handler(IntegrityError)
+async def integrity_exception_handler(request: Request, exc: IntegrityError):
+    """Handle database constraint violations (duplicate keys, foreign key violations)."""
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={
+            "detail": "Veritabanı bütünlük kısıtlaması ihlali (tekil alan çakışması veya geçersiz yabancı anahtar).",
+            "status_code": status.HTTP_409_CONFLICT,
+            "message": str(exc.orig) if settings.DEBUG else "Database integrity violation"
+        }
+    )
+
+
+@app.exception_handler(OperationalError)
+async def operational_exception_handler(request: Request, exc: OperationalError):
+    """Handle database connection or locking issues."""
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={
+            "detail": "Veritabanı kilitlenme veya erişim hatası. Lütfen daha sonra tekrar deneyiniz.",
+            "status_code": status.HTTP_503_SERVICE_UNAVAILABLE,
+            "message": str(exc.orig) if settings.DEBUG else "Database operational issue"
+        }
+    )
+
+
+@app.exception_handler(HTTPException)
+async def custom_http_exception_handler(request: Request, exc: HTTPException):
+    """Ensure all HTTPExceptions return uniform JSON format."""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "detail": exc.detail,
+            "status_code": exc.status_code
+        }
+    )
 
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Fallback exception handler for unhandled exceptions."""
-    # When debug is disabled or in production, hide traceback
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={

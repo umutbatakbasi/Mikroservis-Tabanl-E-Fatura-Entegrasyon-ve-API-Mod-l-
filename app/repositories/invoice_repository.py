@@ -1,8 +1,10 @@
+from datetime import date
 from typing import List, Optional
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, or_
 from sqlalchemy.orm import Session, selectinload, joinedload
 from app.models.invoice_header import InvoiceHeader
 from app.models.invoice_line import InvoiceLine
+from app.models.customer import Customer
 
 
 class InvoiceRepository:
@@ -33,7 +35,17 @@ class InvoiceRepository:
         return db.execute(stmt).scalar_one_or_none()
 
     @staticmethod
-    def get_all(db: Session, skip: int = 0, limit: int = 100) -> List[InvoiceHeader]:
+    def get_all(
+        db: Session,
+        skip: int = 0,
+        limit: int = 100,
+        status: Optional[str] = None,
+        customer_id: Optional[int] = None,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        search: Optional[str] = None,
+    ) -> List[InvoiceHeader]:
+        """Retrieve invoices with optional filtering for 3rd-party integrators."""
         stmt = (
             select(InvoiceHeader)
             .options(
@@ -41,9 +53,31 @@ class InvoiceRepository:
                 selectinload(InvoiceHeader.lines).joinedload(InvoiceLine.product)
             )
             .order_by(desc(InvoiceHeader.id))
-            .offset(skip)
-            .limit(limit)
         )
+
+        if status:
+            stmt = stmt.where(InvoiceHeader.status == status)
+
+        if customer_id:
+            stmt = stmt.where(InvoiceHeader.customer_id == customer_id)
+
+        if start_date:
+            stmt = stmt.where(InvoiceHeader.invoice_date >= start_date)
+
+        if end_date:
+            stmt = stmt.where(InvoiceHeader.invoice_date <= end_date)
+
+        if search:
+            pattern = f"%{search}%"
+            stmt = stmt.join(InvoiceHeader.customer).where(
+                or_(
+                    InvoiceHeader.invoice_number.ilike(pattern),
+                    Customer.name.ilike(pattern),
+                    Customer.tax_number.ilike(pattern),
+                )
+            )
+
+        stmt = stmt.offset(skip).limit(limit)
         return list(db.execute(stmt).scalars().all())
 
     @staticmethod
